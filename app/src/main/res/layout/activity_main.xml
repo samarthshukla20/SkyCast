@@ -29,18 +29,36 @@
                 android:textSize="26sp"
                 android:textStyle="bold" />
 
-            <TextView
+            <FrameLayout
                 android:id="@+id/btnThemeToggle"
-                android:layout_width="46dp"
-                android:layout_height="46dp"
-                android:background="@drawable/bg_weather_card"
+                android:layout_width="68dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_theme_switch_track"
                 android:clickable="true"
                 android:focusable="true"
-                android:gravity="center"
-                android:text="☀︎"
-                android:textColor="@color/sky_accent"
-                android:textSize="25sp"
-                android:contentDescription="Switch to light mode" />
+                android:contentDescription="Switch theme">
+
+                <FrameLayout
+                    android:id="@+id/themeToggleThumb"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_gravity="center_vertical|start"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_theme_switch_thumb"
+                    android:elevation="3dp">
+
+                    <TextView
+                        android:id="@+id/tvThemeToggleIcon"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="☾"
+                        android:textColor="@color/sky_background"
+                        android:textSize="17sp" />
+
+                </FrameLayout>
+
+            </FrameLayout>
 
         </LinearLayout>
 

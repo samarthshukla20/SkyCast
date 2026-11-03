@@ -1,45 +1,50 @@
 package com.samarthshukla.skycast;
 
-import android.os.Bundle;
 import android.Manifest;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.location.Location;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.KeyEvent;
+import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.content.Context;
-import android.view.View;
-import android.widget.EditText;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.location.Priority;
-import com.google.android.gms.tasks.CancellationTokenSource;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.airbnb.lottie.LottieAnimationView;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+import com.google.android.gms.tasks.CancellationTokenSource;
 import com.samarthshukla.skycast.data.api.RetrofitClient;
 import com.samarthshukla.skycast.data.api.WeatherApiService;
 import com.samarthshukla.skycast.model.ForecastDay;
-import com.samarthshukla.skycast.model.GeocodingResponse;
 import com.samarthshukla.skycast.model.ForecastResponse;
+import com.samarthshukla.skycast.model.GeocodingResponse;
 import com.samarthshukla.skycast.model.WeatherResponse;
-import com.samarthshukla.skycast.ui.forecast.ForecastAdapter;
 import com.samarthshukla.skycast.ui.forecast.CitySuggestionAdapter;
+import com.samarthshukla.skycast.ui.forecast.ForecastAdapter;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -52,12 +57,6 @@ import java.util.TreeMap;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-
-import android.content.SharedPreferences;
-import androidx.appcompat.app.AppCompatDelegate;
-
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -97,11 +96,23 @@ public class MainActivity extends AppCompatActivity {
     private Call<ForecastResponse> forecastCall;
     private boolean selectingSuggestion = false;
     private String selectedCityLabel;
-    private TextView btnThemeToggle;
-    private SharedPreferences themePreferences;
+    private double selectedLatitude = Double.NaN;
+    private double selectedLongitude = Double.NaN;
+    private boolean hasSelectedCoordinates = false;
+
+    private static final String STATE_HAS_COORDINATES = "state_has_coordinates";
+    private static final String STATE_LATITUDE = "state_latitude";
+    private static final String STATE_LONGITUDE = "state_longitude";
+    private static final String STATE_CITY_LABEL = "state_city_label";
+    private static final String STATE_CACHE_KEY = "state_cache_key";
+    private static final String STATE_SEARCH_QUERY = "state_search_query";
     private static final String THEME_PREFS = "skycast_theme_preferences";
     private static final String KEY_NIGHT_MODE = "night_mode";
     private View weatherGlow;
+    private FrameLayout btnThemeToggle;
+    private View themeToggleThumb;
+    private TextView tvThemeToggleIcon;
+    private SharedPreferences themePreferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -114,18 +125,22 @@ public class MainActivity extends AppCompatActivity {
         weatherCache = new WeatherCache(this);
         tvLastUpdated = findViewById(R.id.tvLastUpdated);
         setupForecast();
-        loadLastLocationCache();
         setupCitySuggestions();
         setupCitySearch();
         setupThemeToggle();
         weatherGlow = findViewById(R.id.weatherGlow);
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        requestCurrentLocation();
+
+        // Preserve the selected city/location when AppCompat recreates this
+        // Activity after a theme change. On a fresh launch, use current location.
+        if (!restoreWeatherSelection(savedInstanceState)) {
+            loadLastLocationCache();
+            requestCurrentLocation();
+        }
     }
 
     private void initializeViews() {
-        btnThemeToggle = findViewById(R.id.btnThemeToggle);
         tvCity = findViewById(R.id.tvCity);
         tvTemperature = findViewById(R.id.tvTemperature);
         tvCondition = findViewById(R.id.tvCondition);
@@ -140,6 +155,55 @@ public class MainActivity extends AppCompatActivity {
         btnCurrentLocation = findViewById(R.id.btnCurrentLocation);
         citySuggestionsContainer = findViewById(R.id.citySuggestionsContainer);
         citySuggestionsRecyclerView = findViewById(R.id.citySuggestionsRecyclerView);
+        btnThemeToggle = findViewById(R.id.btnThemeToggle);
+        themeToggleThumb = findViewById(R.id.themeToggleThumb);
+        tvThemeToggleIcon = findViewById(R.id.tvThemeToggleIcon);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean(STATE_HAS_COORDINATES, hasSelectedCoordinates);
+        if (hasSelectedCoordinates) {
+            outState.putDouble(STATE_LATITUDE, selectedLatitude);
+            outState.putDouble(STATE_LONGITUDE, selectedLongitude);
+        }
+        outState.putString(STATE_CITY_LABEL, selectedCityLabel);
+        outState.putString(STATE_CACHE_KEY, activeCacheKey);
+        outState.putString(STATE_SEARCH_QUERY,
+                etCitySearch != null ? etCitySearch.getText().toString() : "");
+    }
+
+    private boolean restoreWeatherSelection(Bundle savedInstanceState) {
+        if (savedInstanceState == null
+                || !savedInstanceState.getBoolean(STATE_HAS_COORDINATES, false)) {
+            return false;
+        }
+
+        selectedLatitude = savedInstanceState.getDouble(STATE_LATITUDE);
+        selectedLongitude = savedInstanceState.getDouble(STATE_LONGITUDE);
+        hasSelectedCoordinates = true;
+        selectedCityLabel = savedInstanceState.getString(STATE_CITY_LABEL);
+        String restoredCacheKey = savedInstanceState.getString(STATE_CACHE_KEY);
+        if (restoredCacheKey != null && !restoredCacheKey.isEmpty()) {
+            activeCacheKey = restoredCacheKey;
+        }
+
+        String searchQuery = savedInstanceState.getString(STATE_SEARCH_QUERY, "");
+        selectingSuggestion = true;
+        etCitySearch.setText(searchQuery);
+        selectingSuggestion = false;
+
+        if (selectedCityLabel != null) {
+            tvCity.setText(selectedCityLabel);
+        } else {
+            tvCity.setText("Your location");
+        }
+
+        loadCachedData(activeCacheKey);
+        fetchWeatherByCoordinates(selectedLatitude, selectedLongitude);
+        fetchForecastByCoordinates(selectedLatitude, selectedLongitude);
+        return true;
     }
 
     // THEME MANAGEMENT
@@ -170,24 +234,75 @@ public class MainActivity extends AppCompatActivity {
 
         btnThemeToggle.setOnClickListener(v -> {
 
+            if (!btnThemeToggle.isEnabled()) return;
+
             boolean currentlyDark = themePreferences.getBoolean(
-                    KEY_NIGHT_MODE,
-                    true
+                    KEY_NIGHT_MODE, true
             );
 
             boolean newDarkMode = !currentlyDark;
 
-            // Save the user's selection.
+            // Save preference.
             themePreferences.edit()
                     .putBoolean(KEY_NIGHT_MODE, newDarkMode)
                     .apply();
 
-            // Apply the new theme.
-            AppCompatDelegate.setDefaultNightMode(
+            btnThemeToggle.setEnabled(false);
+
+            btnThemeToggle.setContentDescription(
                     newDarkMode
-                            ? AppCompatDelegate.MODE_NIGHT_YES
-                            : AppCompatDelegate.MODE_NIGHT_NO
+                            ? "Switch to light mode"
+                            : "Switch to dark mode"
             );
+
+            // Animate the sliding thumb.
+            themeToggleThumb.animate()
+                    .cancel();
+
+            themeToggleThumb.animate()
+                    .translationX(dp(newDarkMode ? 0 : 30))
+                    .setDuration(300)
+                    .setInterpolator(new AccelerateDecelerateInterpolator())
+                    .withEndAction(() -> {
+
+                        btnThemeToggle.setEnabled(true);
+
+                        // Apply the new theme after the switch animation.
+                        AppCompatDelegate.setDefaultNightMode(
+                                newDarkMode
+                                        ? AppCompatDelegate.MODE_NIGHT_YES
+                                        : AppCompatDelegate.MODE_NIGHT_NO
+                        );
+
+                    })
+                    .start();
+
+            // Animate the sun/moon icon.
+            tvThemeToggleIcon.animate()
+                    .cancel();
+
+            tvThemeToggleIcon.animate()
+                    .alpha(0f)
+                    .rotationBy(90f)
+                    .setDuration(120)
+                    .withEndAction(() -> {
+
+                        tvThemeToggleIcon.setText(
+                                newDarkMode
+                                        ? "\u263E\uFE0E"
+                                        : "\u2600\uFE0E"
+                        );
+
+                        tvThemeToggleIcon.setRotation(-90f);
+
+                        tvThemeToggleIcon.animate()
+                                .alpha(1f)
+                                .rotation(0f)
+                                .setDuration(140)
+                                .start();
+
+                    })
+                    .start();
 
         });
     }
@@ -196,17 +311,25 @@ public class MainActivity extends AppCompatActivity {
     private void updateThemeToggleIcon() {
 
         boolean darkMode = themePreferences.getBoolean(
-                KEY_NIGHT_MODE,
-                true
+                KEY_NIGHT_MODE, true
         );
 
-        if (darkMode) {
-            btnThemeToggle.setText("\u2600\uFE0E");
-            btnThemeToggle.setContentDescription("Switch to light mode");
-        } else {
-            btnThemeToggle.setText("\u263E\uFE0E");
-            btnThemeToggle.setContentDescription("Switch to dark mode");
-        }
+        // Restore the thumb position after activity recreation.
+        themeToggleThumb.setTranslationX(
+                dp(darkMode ? 0 : 30)
+        );
+
+        tvThemeToggleIcon.setText(
+                darkMode
+                        ? "\u263E\uFE0E"
+                        : "\u2600\uFE0E"
+        );
+
+        btnThemeToggle.setContentDescription(
+                darkMode
+                        ? "Switch to light mode"
+                        : "Switch to dark mode"
+        );
     }
 
     // FORECAST RECYCLER VIEW
@@ -307,6 +430,9 @@ public class MainActivity extends AppCompatActivity {
         String label = city.getName();
         if (!city.getSubtitle().isEmpty()) label += ", " + city.getSubtitle();
         selectedCityLabel = label;
+        selectedLatitude = city.getLat();
+        selectedLongitude = city.getLon();
+        hasSelectedCoordinates = true;
         activeCacheKey = WeatherCache.cityKey(label);
         loadCachedData(activeCacheKey);
         tvCity.setText(label);
@@ -385,6 +511,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadWeatherForLocation(Location location) {
         selectedCityLabel = null;
+        selectedLatitude = location.getLatitude();
+        selectedLongitude = location.getLongitude();
+        hasSelectedCoordinates = true;
         activeCacheKey = WeatherCache.locationKey(location.getLatitude(), location.getLongitude());
         weatherCache.saveLastLocation(location.getLatitude(), location.getLongitude());
         loadCachedData(activeCacheKey); // Let the weather response supply the detected city name.
