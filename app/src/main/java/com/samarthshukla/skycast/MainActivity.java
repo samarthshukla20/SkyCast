@@ -57,6 +57,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "SkyCastForecast";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
+    private WeatherCache weatherCache;
+    private String activeCacheKey = "lucknow";
+    private TextView tvLastUpdated;
 
     private TextView tvCity;
     private TextView tvTemperature;
@@ -96,7 +99,10 @@ public class MainActivity extends AppCompatActivity {
 
         initializeViews();
         weatherApiService = RetrofitClient.getWeatherApi();
+        weatherCache = new WeatherCache(this);
+        tvLastUpdated = findViewById(R.id.tvLastUpdated);
         setupForecast();
+        loadLastLocationCache();
         setupCitySuggestions();
         setupCitySearch();
 
@@ -219,6 +225,8 @@ public class MainActivity extends AppCompatActivity {
         String label = city.getName();
         if (!city.getSubtitle().isEmpty()) label += ", " + city.getSubtitle();
         selectedCityLabel = label;
+        activeCacheKey = WeatherCache.cityKey(label);
+        loadCachedData(activeCacheKey);
         tvCity.setText(label);
         fetchWeatherByCoordinates(city.getLat(), city.getLon());
         fetchForecastByCoordinates(city.getLat(), city.getLon());
@@ -294,7 +302,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadWeatherForLocation(Location location) {
-        selectedCityLabel = null; // Let the weather response supply the detected city name.
+        selectedCityLabel = null;
+        activeCacheKey = WeatherCache.locationKey(location.getLatitude(), location.getLongitude());
+        weatherCache.saveLastLocation(location.getLatitude(), location.getLongitude());
+        loadCachedData(activeCacheKey); // Let the weather response supply the detected city name.
         hideCitySuggestions();
         tvCity.setText("Your location");
         fetchWeatherByCoordinates(location.getLatitude(), location.getLongitude());
@@ -312,10 +323,54 @@ public class MainActivity extends AppCompatActivity {
                         "Location permission denied. You can still search for any city.",
                         Toast.LENGTH_LONG).show();
                 // Keep the app usable when the user declines location access.
+                activeCacheKey = WeatherCache.cityKey("Lucknow");
+                selectedCityLabel = "Lucknow";
+                loadCachedData(activeCacheKey);
                 fetchWeather("Lucknow");
                 fetchFiveDayForecast("Lucknow");
             }
         }
+    }
+
+    // OFFLINE CACHE
+
+    private void loadLastLocationCache() {
+        double[] lastLocation = weatherCache.getLastLocation();
+        if (lastLocation != null) {
+            activeCacheKey = WeatherCache.locationKey(lastLocation[0], lastLocation[1]);
+            loadCachedData(activeCacheKey);
+        }
+    }
+
+    private void loadCachedData(String cacheKey) {
+        WeatherResponse cachedWeather = weatherCache.getCurrentWeather(cacheKey);
+        ForecastResponse cachedForecast = weatherCache.getForecast(cacheKey);
+        boolean found = false;
+
+        if (cachedWeather != null) {
+            updateWeatherUI(cachedWeather);
+            found = true;
+        }
+        if (cachedForecast != null && cachedForecast.getForecastEntries() != null
+                && !cachedForecast.getForecastEntries().isEmpty()) {
+            buildDailyForecast(cachedForecast.getForecastEntries());
+            found = true;
+        }
+
+        if (found) updateCacheTimestamp(cacheKey);
+        else if (tvLastUpdated != null) tvLastUpdated.setText("No saved weather data");
+    }
+
+    private void updateCacheTimestamp(String cacheKey) {
+        if (tvLastUpdated == null) return;
+        long savedAt = weatherCache.getLastUpdated(cacheKey);
+        if (savedAt <= 0) {
+            tvLastUpdated.setText("Waiting for weather data...");
+            return;
+        }
+        String formatted = new SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
+                .format(new Date(savedAt));
+        tvLastUpdated.setText("Last updated: " + formatted);
     }
 
     // CURRENT WEATHER API
@@ -331,7 +386,10 @@ public class MainActivity extends AppCompatActivity {
                     Call<WeatherResponse> call,
                     Response<WeatherResponse> response
             ) {
+                if (call.isCanceled()) return;
                 if (response.isSuccessful() && response.body() != null) {
+                    weatherCache.saveCurrentWeather(activeCacheKey, response.body());
+                    updateCacheTimestamp(activeCacheKey);
                     updateWeatherUI(response.body());
                 } else {
                     Toast.makeText(
@@ -361,7 +419,11 @@ public class MainActivity extends AppCompatActivity {
         currentWeatherCall.enqueue(new Callback<WeatherResponse>() {
             @Override public void onResponse(Call<WeatherResponse> call, Response<WeatherResponse> response) {
                 if (call.isCanceled()) return;
-                if (response.isSuccessful() && response.body() != null) updateWeatherUI(response.body());
+                if (response.isSuccessful() && response.body() != null) {
+                    weatherCache.saveCurrentWeather(activeCacheKey, response.body());
+                    updateCacheTimestamp(activeCacheKey);
+                    updateWeatherUI(response.body());
+                }
                 else Toast.makeText(MainActivity.this, "Unable to fetch weather: " + response.code(), Toast.LENGTH_SHORT).show();
             }
             @Override public void onFailure(Call<WeatherResponse> call, Throwable t) {
@@ -428,7 +490,10 @@ public class MainActivity extends AppCompatActivity {
                     Call<ForecastResponse> call,
                     Response<ForecastResponse> response
             ) {
+                if (call.isCanceled()) return;
                 if (response.isSuccessful() && response.body() != null) {
+                    weatherCache.saveForecast(activeCacheKey, response.body());
+                    updateCacheTimestamp(activeCacheKey);
                     List<ForecastResponse.ForecastEntry> entries =
                             response.body().getForecastEntries();
 
@@ -489,6 +554,8 @@ public class MainActivity extends AppCompatActivity {
             @Override public void onResponse(Call<ForecastResponse> call, Response<ForecastResponse> response) {
                 if (call.isCanceled()) return;
                 if (response.isSuccessful() && response.body() != null) {
+                    weatherCache.saveForecast(activeCacheKey, response.body());
+                    updateCacheTimestamp(activeCacheKey);
                     List<ForecastResponse.ForecastEntry> entries = response.body().getForecastEntries();
                     if (entries != null && !entries.isEmpty()) buildDailyForecast(entries);
                     else Toast.makeText(MainActivity.this, "No forecast data available", Toast.LENGTH_SHORT).show();

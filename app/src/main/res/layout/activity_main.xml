@@ -122,6 +122,16 @@
             android:textColor="@color/sky_text_secondary"
             android:textSize="14sp" />
 
+        <TextView
+            android:id="@+id/tvLastUpdated"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:gravity="center"
+            android:text="Waiting for weather data..."
+            android:textColor="@color/sky_text_secondary"
+            android:textSize="11sp" />
+
         <!-- Weather Icon -->
         <com.airbnb.lottie.LottieAnimationView
             android:id="@+id/tvWeatherIcon"
