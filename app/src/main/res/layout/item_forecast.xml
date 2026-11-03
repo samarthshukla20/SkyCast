@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="90dp"
     android:layout_height="175dp"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_marginEnd="12dp"
     android:background="@drawable/bg_weather_card"
     android:gravity="center"
@@ -16,13 +17,13 @@
         android:textColor="@color/sky_text_secondary"
         android:textSize="13sp" />
 
-    <TextView
+    <com.airbnb.lottie.LottieAnimationView
         android:id="@+id/tvForecastIcon"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_marginTop="6dp"
-        android:text="☀"
-        android:textSize="30sp" />
+        app:lottie_autoPlay="false"
+        app:lottie_loop="true" />
 
     <TextView
         android:id="@+id/tvForecastMax"

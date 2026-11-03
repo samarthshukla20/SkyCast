@@ -1,19 +1,20 @@
 package com.samarthshukla.skycast;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.airbnb.lottie.LottieAnimationView;
 import com.samarthshukla.skycast.data.api.RetrofitClient;
 import com.samarthshukla.skycast.data.api.WeatherApiService;
-import com.samarthshukla.skycast.model.WeatherResponse;
-import com.samarthshukla.skycast.model.ForecastResponse;
 import com.samarthshukla.skycast.model.ForecastDay;
+import com.samarthshukla.skycast.model.ForecastResponse;
+import com.samarthshukla.skycast.model.WeatherResponse;
 import com.samarthshukla.skycast.ui.forecast.ForecastAdapter;
 
 import java.text.SimpleDateFormat;
@@ -35,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvCity;
     private TextView tvTemperature;
     private TextView tvCondition;
+    private LottieAnimationView tvWeatherIcon;
     private TextView tvHighLow;
     private TextView tvFeelsLike;
     private TextView tvHumidity;
@@ -53,9 +55,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         initializeViews();
-
         weatherApiService = RetrofitClient.getWeatherApi();
-
         setupForecast();
 
         fetchWeather("Lucknow");
@@ -63,28 +63,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initializeViews() {
-
         tvCity = findViewById(R.id.tvCity);
         tvTemperature = findViewById(R.id.tvTemperature);
         tvCondition = findViewById(R.id.tvCondition);
         tvHighLow = findViewById(R.id.tvHighLow);
-
+        tvWeatherIcon = findViewById(R.id.tvWeatherIcon);
         tvFeelsLike = findViewById(R.id.tvFeelsLike);
         tvHumidity = findViewById(R.id.tvHumidity);
         tvWind = findViewById(R.id.tvWind);
         tvPressure = findViewById(R.id.tvPressure);
     }
 
-    // -----------------------------------------
     // FORECAST RECYCLER VIEW
-    // -----------------------------------------
 
     private void setupForecast() {
-
         forecastRecyclerView = findViewById(R.id.forecastRecyclerView);
-
         forecastList = new ArrayList<>();
-
         forecastAdapter = new ForecastAdapter(forecastList);
 
         LinearLayoutManager layoutManager = new LinearLayoutManager(
@@ -97,30 +91,22 @@ public class MainActivity extends AppCompatActivity {
         forecastRecyclerView.setAdapter(forecastAdapter);
     }
 
-    // -----------------------------------------
     // CURRENT WEATHER API
-    // -----------------------------------------
 
     private void fetchWeather(String city) {
-
         weatherApiService.getCurrentWeather(
                 city,
                 BuildConfig.WEATHER_API_KEY,
                 "metric"
         ).enqueue(new Callback<WeatherResponse>() {
-
             @Override
             public void onResponse(
                     Call<WeatherResponse> call,
                     Response<WeatherResponse> response
             ) {
-
                 if (response.isSuccessful() && response.body() != null) {
-
                     updateWeatherUI(response.body());
-
                 } else {
-
                     Toast.makeText(
                             MainActivity.this,
                             "Unable to fetch weather. Error: " + response.code(),
@@ -130,11 +116,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onFailure(
-                    Call<WeatherResponse> call,
-                    Throwable throwable
-            ) {
-
+            public void onFailure(Call<WeatherResponse> call, Throwable throwable) {
                 Log.e(TAG, "Current weather request failed", throwable);
 
                 Toast.makeText(
@@ -147,7 +129,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateWeatherUI(WeatherResponse weather) {
-
         tvCity.setText(weather.getCityName());
 
         tvTemperature.setText(
@@ -178,65 +159,50 @@ public class MainActivity extends AppCompatActivity {
                 "Pressure\n" + weather.getMain().getPressure() + " hPa"
         );
 
-        if (weather.getWeather() != null
-                && !weather.getWeather().isEmpty()) {
-
-            String condition = weather.getWeather()
-                    .get(0)
-                    .getDescription();
+        if (weather.getWeather() != null && !weather.getWeather().isEmpty()) {
+            String condition = weather.getWeather().get(0).getDescription();
+            String iconCode = weather.getWeather().get(0).getIcon();
 
             if (condition != null && !condition.isEmpty()) {
-                condition = condition.substring(0, 1).toUpperCase()
+                condition = condition.substring(0, 1).toUpperCase(Locale.getDefault())
                         + condition.substring(1);
             }
 
-            tvCondition.setText(condition);
+            tvCondition.setText(condition != null ? condition : "Unknown");
+            playWeatherAnimation(tvWeatherIcon, iconCode);
         }
     }
 
-    // -----------------------------------------
     // FIVE-DAY FORECAST API
-    // -----------------------------------------
 
     private void fetchFiveDayForecast(String city) {
-
         weatherApiService.getFiveDayForecast(
                 city,
                 BuildConfig.WEATHER_API_KEY,
                 "metric"
         ).enqueue(new Callback<ForecastResponse>() {
-
             @Override
             public void onResponse(
                     Call<ForecastResponse> call,
                     Response<ForecastResponse> response
             ) {
-
                 if (response.isSuccessful() && response.body() != null) {
-
                     List<ForecastResponse.ForecastEntry> entries =
                             response.body().getForecastEntries();
 
                     if (entries != null && !entries.isEmpty()) {
-
-                        // Inspect the first five forecast entries.
                         for (int i = 0; i < Math.min(entries.size(), 5); i++) {
-
                             ForecastResponse.ForecastEntry entry = entries.get(i);
 
                             Log.d(TAG, "Forecast date: " + entry.getDateTime());
-
                             Log.d(TAG, "Rain probability: "
                                     + entry.getRainPercentage() + "%");
-
                             Log.d(TAG, "Raw forecast entry: "
                                     + new com.google.gson.Gson().toJson(entry));
                         }
 
                         buildDailyForecast(entries);
-
                     } else {
-
                         Log.e(TAG, "Forecast response contains no entries");
 
                         Toast.makeText(
@@ -245,9 +211,7 @@ public class MainActivity extends AppCompatActivity {
                                 Toast.LENGTH_SHORT
                         ).show();
                     }
-
                 } else {
-
                     Log.e(TAG, "Forecast API error: " + response.code());
 
                     Toast.makeText(
@@ -263,7 +227,6 @@ public class MainActivity extends AppCompatActivity {
                     Call<ForecastResponse> call,
                     Throwable throwable
             ) {
-
                 Log.e(TAG, "Forecast request failed", throwable);
 
                 Toast.makeText(
@@ -275,14 +238,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    // -----------------------------------------
     // CONVERT 3-HOURLY DATA INTO DAILY FORECAST
-    // -----------------------------------------
 
-    private void buildDailyForecast(
-            List<ForecastResponse.ForecastEntry> entries
-    ) {
-
+    private void buildDailyForecast(List<ForecastResponse.ForecastEntry> entries) {
         Map<String, DailyWeather> dailyMap = new TreeMap<>();
 
         SimpleDateFormat dateKeyFormat =
@@ -291,30 +249,26 @@ public class MainActivity extends AppCompatActivity {
         SimpleDateFormat dayFormat =
                 new SimpleDateFormat("EEE", Locale.getDefault());
 
-        for (ForecastResponse.ForecastEntry entry : entries) {
+        SimpleDateFormat hourFormat =
+                new SimpleDateFormat("HH", Locale.getDefault());
 
+        for (ForecastResponse.ForecastEntry entry : entries) {
             if (entry.getMain() == null) {
                 continue;
             }
 
             Date date = new Date(entry.getTimestamp() * 1000L);
-
             String dateKey = dateKeyFormat.format(date);
 
             DailyWeather daily = dailyMap.get(dateKey);
 
             if (daily == null) {
-
                 daily = new DailyWeather();
                 daily.date = date;
-
                 daily.minTemp = entry.getMain().getMinTemperature();
                 daily.maxTemp = entry.getMain().getMaxTemperature();
-
                 dailyMap.put(dateKey, daily);
-
             } else {
-
                 daily.minTemp = Math.min(
                         daily.minTemp,
                         entry.getMain().getMinTemperature()
@@ -327,31 +281,20 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // Select the weather condition closest to noon.
-            int hour = Integer.parseInt(
-                    new SimpleDateFormat("HH", Locale.getDefault())
-                            .format(date)
-            );
-
+            int hour = Integer.parseInt(hourFormat.format(date));
             int noonDistance = Math.abs(hour - 12);
 
             if (noonDistance < daily.closestNoonDistance) {
-
                 daily.closestNoonDistance = noonDistance;
 
-                if (entry.getWeather() != null
-                        && !entry.getWeather().isEmpty()) {
-
-                    daily.condition =
-                            entry.getWeather().get(0).getDescription();
-
-                    daily.iconCode =
-                            entry.getWeather().get(0).getIcon();
+                if (entry.getWeather() != null && !entry.getWeather().isEmpty()) {
+                    daily.condition = entry.getWeather().get(0).getDescription();
+                    daily.iconCode = entry.getWeather().get(0).getIcon();
                 }
             }
 
-            // Probability of precipitation as a percentage.
+            // Keep the highest precipitation probability for the day.
             int rainProbability = entry.getRainPercentage();
-
             daily.precipitationProbability = Math.max(
                     daily.precipitationProbability,
                     rainProbability
@@ -359,31 +302,23 @@ public class MainActivity extends AppCompatActivity {
 
             Log.d(TAG, "Rain probability: "
                     + entry.getPrecipitationProbability());
-
         }
 
         forecastList.clear();
-
         int index = 0;
 
         for (DailyWeather daily : dailyMap.values()) {
+            String dayName = index == 0 ? "Today" : dayFormat.format(daily.date);
 
-            String dayName;
-
-            if (index == 0) {
-                dayName = "Today";
-            } else {
-                dayName = dayFormat.format(daily.date);
-            }
-
-            String emoji = getWeatherEmoji(daily.iconCode);
+            // ForecastDay now stores the Lottie asset filename, not an emoji.
+            String animationFile = getAnimationFile(daily.iconCode);
 
             int maxTemp = (int) Math.round(daily.maxTemp);
             int minTemp = (int) Math.round(daily.minTemp);
 
             ForecastDay forecastDay = new ForecastDay(
                     dayName,
-                    emoji,
+                    animationFile,
                     daily.condition != null ? daily.condition : "Unknown",
                     maxTemp,
                     minTemp,
@@ -391,72 +326,89 @@ public class MainActivity extends AppCompatActivity {
             );
 
             forecastList.add(forecastDay);
-
             index++;
         }
 
         forecastAdapter.notifyDataSetChanged();
-
         Log.d(TAG, "Daily forecast loaded: " + forecastList.size());
     }
 
-    // -----------------------------------------
-    // WEATHER ICON MAPPING
-    // -----------------------------------------
+    // LOTTIE WEATHER ANIMATIONS
 
-    private String getWeatherEmoji(String iconCode) {
-
-        if (iconCode == null) {
-            return "🌤️";
+    /**
+     * Returns the matching JSON filename from app/src/main/assets.
+     * Mist/fog (50x) intentionally uses the cloudy fallback animation.
+     */
+    private String getAnimationFile(String iconCode) {
+        if (iconCode == null || iconCode.length() < 2) {
+            return "few_clouds.json";
         }
 
-        if (iconCode.startsWith("01")) {
-            return "☀️";
-        }
+        String conditionCode = iconCode.substring(0, 2);
 
-        if (iconCode.startsWith("02")) {
-            return "🌤️";
-        }
+        switch (conditionCode) {
+            case "01":
+                return iconCode.endsWith("n")
+                        ? "clear_night.json"
+                        : "clear_day.json";
 
-        if (iconCode.startsWith("03") || iconCode.startsWith("04")) {
-            return "☁️";
-        }
+            case "02":
+                return "few_clouds.json";
 
-        if (iconCode.startsWith("09") || iconCode.startsWith("10")) {
-            return "🌧️";
-        }
+            case "03":
+            case "04":
+            case "50":
+                return "cloudy.json";
 
-        if (iconCode.startsWith("11")) {
-            return "⛈️";
-        }
+            case "09":
+            case "10":
+                return "rain.json";
 
-        if (iconCode.startsWith("13")) {
-            return "❄️";
-        }
+            case "11":
+                return "thunderstorm.json";
 
-        if (iconCode.startsWith("50")) {
-            return "🌫️";
-        }
+            case "13":
+                return "snow.json";
 
-        return "🌤️";
+            default:
+                return "few_clouds.json";
+        }
     }
 
-    // -----------------------------------------
+    private void playWeatherAnimation(
+            LottieAnimationView animationView,
+            String iconCode
+    ) {
+        if (animationView == null) {
+            return;
+        }
+
+        String animationFile = getAnimationFile(iconCode);
+
+        animationView.cancelAnimation();
+        animationView.setAnimation(animationFile);
+        animationView.setRepeatCount(-1);
+        animationView.playAnimation();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        if (tvWeatherIcon != null) {
+            tvWeatherIcon.cancelAnimation();
+        }
+    }
+
     // DAILY FORECAST DATA HOLDER
-    // -----------------------------------------
 
     private static class DailyWeather {
-
         Date date;
-
         double minTemp;
         double maxTemp;
-
         String condition;
         String iconCode;
-
         int precipitationProbability = 0;
-
         int closestNoonDistance = Integer.MAX_VALUE;
     }
 }

@@ -8,6 +8,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.airbnb.lottie.LottieAnimationView;
 import com.samarthshukla.skycast.R;
 import com.samarthshukla.skycast.model.ForecastDay;
 
@@ -39,12 +40,27 @@ public class ForecastAdapter extends RecyclerView.Adapter<ForecastAdapter.Foreca
         ForecastDay forecast = forecastList.get(position);
 
         holder.tvDay.setText(forecast.getDay());
-        holder.tvIcon.setText(forecast.getWeatherIcon());
+
         holder.tvMax.setText(forecast.getMaxTemp() + "°");
         holder.tvMin.setText(forecast.getMinTemp() + "°");
+
         holder.tvRain.setText(
                 "Rain " + forecast.getPrecipitationProbability() + "%"
         );
+
+        // Load the Lottie animation.
+        String animationFile = forecast.getWeatherIcon();
+
+        holder.tvIcon.cancelAnimation();
+        holder.tvIcon.setAnimation(animationFile);
+        holder.tvIcon.setRepeatCount(-1);
+        holder.tvIcon.playAnimation();
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull ForecastViewHolder holder) {
+        super.onViewRecycled(holder);
+        holder.tvIcon.cancelAnimation();
     }
 
     @Override
@@ -54,7 +70,8 @@ public class ForecastAdapter extends RecyclerView.Adapter<ForecastAdapter.Foreca
 
     static class ForecastViewHolder extends RecyclerView.ViewHolder {
 
-        TextView tvDay, tvIcon, tvMax, tvMin, tvRain;
+        TextView tvDay, tvMax, tvMin, tvRain;
+        LottieAnimationView tvIcon;
 
         public ForecastViewHolder(@NonNull View itemView) {
             super(itemView);
