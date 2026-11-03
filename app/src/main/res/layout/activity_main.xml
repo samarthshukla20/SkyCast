@@ -14,7 +14,6 @@
         android:padding="22dp">
 
         <!-- Header -->
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -29,11 +28,9 @@
                 android:textColor="@color/sky_text_primary"
                 android:textSize="26sp"
                 android:textStyle="bold" />
-
         </LinearLayout>
 
-        <!-- City Search -->
-
+        <!-- City Search and Current Location -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -64,14 +61,26 @@
                 android:layout_height="52dp"
                 android:layout_marginStart="8dp"
                 android:backgroundTint="@color/sky_accent"
+                android:minWidth="0dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
                 android:text="Search"
                 android:textAllCaps="false"
                 android:textColor="@color/sky_background" />
 
+            <ImageButton
+                android:id="@+id/btnCurrentLocation"
+                android:layout_width="48dp"
+                android:layout_height="52dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_weather_card"
+                android:contentDescription="Use current location"
+                android:padding="13dp"
+                android:src="@android:drawable/ic_menu_mylocation"
+                app:tint="@color/sky_accent" />
         </LinearLayout>
 
         <!-- City Suggestions Dropdown -->
-
         <LinearLayout
             android:id="@+id/citySuggestionsContainer"
             android:layout_width="match_parent"
@@ -89,18 +98,16 @@
                 android:layout_height="wrap_content"
                 android:nestedScrollingEnabled="false"
                 android:overScrollMode="never" />
-
         </LinearLayout>
 
         <!-- Location -->
-
         <TextView
             android:id="@+id/tvCity"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="35dp"
             android:gravity="center"
-            android:text="Bhopal, India"
+            android:text="Finding your location..."
             android:textColor="@color/sky_text_primary"
             android:textSize="21sp"
             android:textStyle="bold" />
@@ -116,7 +123,6 @@
             android:textSize="14sp" />
 
         <!-- Weather Icon -->
-
         <com.airbnb.lottie.LottieAnimationView
             android:id="@+id/tvWeatherIcon"
             android:layout_width="180dp"
@@ -127,7 +133,6 @@
             app:lottie_loop="true" />
 
         <!-- Temperature -->
-
         <TextView
             android:id="@+id/tvTemperature"
             android:layout_width="match_parent"
@@ -158,7 +163,6 @@
             android:textSize="15sp" />
 
         <!-- Weather Details -->
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -177,7 +181,8 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Feels Like\n29°C"
+                    android:text="Feels Like
+29°C"
                     android:textColor="@color/sky_text_primary"
                     android:textSize="15sp" />
 
@@ -186,10 +191,10 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Humidity\n45%"
+                    android:text="Humidity
+45%"
                     android:textColor="@color/sky_text_primary"
                     android:textSize="15sp" />
-
             </LinearLayout>
 
             <View
@@ -209,7 +214,8 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Wind\n12 km/h"
+                    android:text="Wind
+12 km/h"
                     android:textColor="@color/sky_text_primary"
                     android:textSize="15sp" />
 
@@ -218,16 +224,14 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Pressure\n1012 hPa"
+                    android:text="Pressure
+1012 hPa"
                     android:textColor="@color/sky_text_primary"
                     android:textSize="15sp" />
-
             </LinearLayout>
-
         </LinearLayout>
 
         <!-- Forecast Heading -->
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -238,7 +242,6 @@
             android:textStyle="bold" />
 
         <!-- Forecast RecyclerView -->
-
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/forecastRecyclerView"
             android:layout_width="match_parent"
@@ -246,7 +249,5 @@
             android:layout_marginTop="15dp"
             android:clipToPadding="false"
             android:overScrollMode="never" />
-
     </LinearLayout>
-
 </ScrollView>

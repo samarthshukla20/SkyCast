@@ -87,4 +87,6 @@ dependencies {
     androidTestImplementation libs.ext.junit
 
     implementation 'com.airbnb.android:lottie:6.6.7'
+
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
 }

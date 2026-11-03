@@ -1,6 +1,9 @@
 package com.samarthshukla.skycast;
 
 import android.os.Bundle;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
@@ -18,6 +21,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+import com.google.android.gms.tasks.CancellationTokenSource;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -46,6 +56,7 @@ import retrofit2.Response;
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "SkyCastForecast";
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
 
     private TextView tvCity;
     private TextView tvTemperature;
@@ -64,6 +75,9 @@ public class MainActivity extends AppCompatActivity {
     private WeatherApiService weatherApiService;
     private EditText etCitySearch;
     private Button btnSearchCity;
+    private View btnCurrentLocation;
+    private FusedLocationProviderClient fusedLocationClient;
+    private CancellationTokenSource locationCancellationTokenSource;
     private LinearLayout citySuggestionsContainer;
     private RecyclerView citySuggestionsRecyclerView;
     private CitySuggestionAdapter citySuggestionAdapter;
@@ -86,8 +100,8 @@ public class MainActivity extends AppCompatActivity {
         setupCitySuggestions();
         setupCitySearch();
 
-        fetchWeather("Lucknow");
-        fetchFiveDayForecast("Lucknow");
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        requestCurrentLocation();
     }
 
     private void initializeViews() {
@@ -102,6 +116,7 @@ public class MainActivity extends AppCompatActivity {
         tvPressure = findViewById(R.id.tvPressure);
         etCitySearch = findViewById(R.id.etCitySearch);
         btnSearchCity = findViewById(R.id.btnSearchCity);
+        btnCurrentLocation = findViewById(R.id.btnCurrentLocation);
         citySuggestionsContainer = findViewById(R.id.citySuggestionsContainer);
         citySuggestionsRecyclerView = findViewById(R.id.citySuggestionsRecyclerView);
     }
@@ -145,6 +160,7 @@ public class MainActivity extends AppCompatActivity {
             @Override public void afterTextChanged(Editable s) { }
         });
         btnSearchCity.setOnClickListener(v -> searchCityFromButton());
+        btnCurrentLocation.setOnClickListener(v -> requestCurrentLocation());
         etCitySearch.setOnEditorActionListener((v, actionId, event) -> {
             boolean enter = event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
                     && event.getAction() == KeyEvent.ACTION_DOWN;
@@ -216,6 +232,90 @@ public class MainActivity extends AppCompatActivity {
     private void hideKeyboard() {
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null) imm.hideSoftInputFromWindow(etCitySearch.getWindowToken(), 0);
+    }
+
+    // CURRENT LOCATION
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestCurrentLocation() {
+        if (!hasLocationPermission()) {
+            ActivityCompat.requestPermissions(
+                    this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                    LOCATION_PERMISSION_REQUEST_CODE
+            );
+            return;
+        }
+
+        if (btnCurrentLocation != null) btnCurrentLocation.setEnabled(false);
+        Toast.makeText(this, "Getting your location...", Toast.LENGTH_SHORT).show();
+
+        // Prefer a fresh location; this avoids showing stale weather from an old location.
+        if (locationCancellationTokenSource != null) locationCancellationTokenSource.cancel();
+        locationCancellationTokenSource = new CancellationTokenSource();
+
+        try {
+            fusedLocationClient.getCurrentLocation(
+                    Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    locationCancellationTokenSource.getToken()
+            ).addOnSuccessListener(this, location -> {
+                if (btnCurrentLocation != null) btnCurrentLocation.setEnabled(true);
+                if (location != null) {
+                    loadWeatherForLocation(location);
+                } else {
+                    // Fall back to the last known location if a fresh fix is unavailable.
+                    fusedLocationClient.getLastLocation()
+                            .addOnSuccessListener(this, lastLocation -> {
+                                if (lastLocation != null) loadWeatherForLocation(lastLocation);
+                                else Toast.makeText(this,
+                                        "Couldn't determine location. Check that Location is enabled and try again.",
+                                        Toast.LENGTH_LONG).show();
+                            })
+                            .addOnFailureListener(this, error -> {
+                                Log.e(TAG, "Last location lookup failed", error);
+                                Toast.makeText(this, "Unable to get your location", Toast.LENGTH_SHORT).show();
+                            });
+                }
+            }).addOnFailureListener(this, error -> {
+                if (btnCurrentLocation != null) btnCurrentLocation.setEnabled(true);
+                Log.e(TAG, "Current location lookup failed", error);
+                Toast.makeText(this, "Unable to get your location. Try again.", Toast.LENGTH_SHORT).show();
+            });
+        } catch (SecurityException exception) {
+            if (btnCurrentLocation != null) btnCurrentLocation.setEnabled(true);
+            Log.e(TAG, "Location permission missing", exception);
+        }
+    }
+
+    private void loadWeatherForLocation(Location location) {
+        selectedCityLabel = null; // Let the weather response supply the detected city name.
+        hideCitySuggestions();
+        tvCity.setText("Your location");
+        fetchWeatherByCoordinates(location.getLatitude(), location.getLongitude());
+        fetchForecastByCoordinates(location.getLatitude(), location.getLongitude());
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (hasLocationPermission()) {
+                requestCurrentLocation();
+            } else {
+                Toast.makeText(this,
+                        "Location permission denied. You can still search for any city.",
+                        Toast.LENGTH_LONG).show();
+                // Keep the app usable when the user declines location access.
+                fetchWeather("Lucknow");
+                fetchFiveDayForecast("Lucknow");
+            }
+        }
     }
 
     // CURRENT WEATHER API
@@ -567,6 +667,7 @@ public class MainActivity extends AppCompatActivity {
         if (citySearchCall != null) citySearchCall.cancel();
         if (currentWeatherCall != null) currentWeatherCall.cancel();
         if (forecastCall != null) forecastCall.cancel();
+        if (locationCancellationTokenSource != null) locationCancellationTokenSource.cancel();
     }
 
     // DAILY FORECAST DATA HOLDER
