@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="@drawable/bg_main"
     android:fillViewport="true"
     android:scrollbars="none">
@@ -30,13 +30,65 @@
                 android:textSize="26sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/tvSearch"
+        </LinearLayout>
+
+        <!-- City Search -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/etCitySearch"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_weather_card"
+                android:hint="Search city..."
+                android:imeOptions="actionSearch"
+                android:inputType="textCapWords"
+                android:paddingStart="16dp"
+                android:paddingEnd="12dp"
+                android:singleLine="true"
+                android:textColor="@color/sky_text_primary"
+                android:textColorHint="@color/sky_text_secondary"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnSearchCity"
                 android:layout_width="wrap_content"
+                android:layout_height="52dp"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="@color/sky_accent"
+                android:text="Search"
+                android:textAllCaps="false"
+                android:textColor="@color/sky_background" />
+
+        </LinearLayout>
+
+        <!-- City Suggestions Dropdown -->
+
+        <LinearLayout
+            android:id="@+id/citySuggestionsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/bg_weather_card"
+            android:elevation="8dp"
+            android:orientation="vertical"
+            android:padding="6dp"
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/citySuggestionsRecyclerView"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="⌕"
-                android:textColor="@color/sky_accent"
-                android:textSize="32sp" />
+                android:nestedScrollingEnabled="false"
+                android:overScrollMode="never" />
 
         </LinearLayout>
 
@@ -185,7 +237,7 @@
             android:textSize="20sp"
             android:textStyle="bold" />
 
-        <!-- Forecast Placeholder -->
+        <!-- Forecast RecyclerView -->
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/forecastRecyclerView"

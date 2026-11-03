@@ -1,6 +1,18 @@
 package com.samarthshukla.skycast;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.KeyEvent;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.util.Log;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -13,9 +25,11 @@ import com.airbnb.lottie.LottieAnimationView;
 import com.samarthshukla.skycast.data.api.RetrofitClient;
 import com.samarthshukla.skycast.data.api.WeatherApiService;
 import com.samarthshukla.skycast.model.ForecastDay;
+import com.samarthshukla.skycast.model.GeocodingResponse;
 import com.samarthshukla.skycast.model.ForecastResponse;
 import com.samarthshukla.skycast.model.WeatherResponse;
 import com.samarthshukla.skycast.ui.forecast.ForecastAdapter;
+import com.samarthshukla.skycast.ui.forecast.CitySuggestionAdapter;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -48,6 +62,18 @@ public class MainActivity extends AppCompatActivity {
     private List<ForecastDay> forecastList;
 
     private WeatherApiService weatherApiService;
+    private EditText etCitySearch;
+    private Button btnSearchCity;
+    private LinearLayout citySuggestionsContainer;
+    private RecyclerView citySuggestionsRecyclerView;
+    private CitySuggestionAdapter citySuggestionAdapter;
+    private final Handler searchHandler = new Handler(Looper.getMainLooper());
+    private Runnable searchRunnable;
+    private Call<List<GeocodingResponse>> citySearchCall;
+    private Call<WeatherResponse> currentWeatherCall;
+    private Call<ForecastResponse> forecastCall;
+    private boolean selectingSuggestion = false;
+    private String selectedCityLabel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +83,8 @@ public class MainActivity extends AppCompatActivity {
         initializeViews();
         weatherApiService = RetrofitClient.getWeatherApi();
         setupForecast();
+        setupCitySuggestions();
+        setupCitySearch();
 
         fetchWeather("Lucknow");
         fetchFiveDayForecast("Lucknow");
@@ -72,6 +100,10 @@ public class MainActivity extends AppCompatActivity {
         tvHumidity = findViewById(R.id.tvHumidity);
         tvWind = findViewById(R.id.tvWind);
         tvPressure = findViewById(R.id.tvPressure);
+        etCitySearch = findViewById(R.id.etCitySearch);
+        btnSearchCity = findViewById(R.id.btnSearchCity);
+        citySuggestionsContainer = findViewById(R.id.citySuggestionsContainer);
+        citySuggestionsRecyclerView = findViewById(R.id.citySuggestionsRecyclerView);
     }
 
     // FORECAST RECYCLER VIEW
@@ -91,14 +123,109 @@ public class MainActivity extends AppCompatActivity {
         forecastRecyclerView.setAdapter(forecastAdapter);
     }
 
+    private void setupCitySuggestions() {
+        citySuggestionAdapter = new CitySuggestionAdapter(this::onCitySelected);
+        citySuggestionsRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        citySuggestionsRecyclerView.setAdapter(citySuggestionAdapter);
+        citySuggestionsContainer.setVisibility(View.GONE);
+    }
+
+    private void setupCitySearch() {
+        etCitySearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (selectingSuggestion) return;
+                String query = s.toString().trim();
+                if (searchRunnable != null) searchHandler.removeCallbacks(searchRunnable);
+                if (citySearchCall != null) citySearchCall.cancel();
+                if (query.length() < 2) { hideCitySuggestions(); return; }
+                searchRunnable = () -> requestCitySuggestions(query);
+                searchHandler.postDelayed(searchRunnable, 400);
+            }
+            @Override public void afterTextChanged(Editable s) { }
+        });
+        btnSearchCity.setOnClickListener(v -> searchCityFromButton());
+        etCitySearch.setOnEditorActionListener((v, actionId, event) -> {
+            boolean enter = event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == KeyEvent.ACTION_DOWN;
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || enter) { searchCityFromButton(); return true; }
+            return false;
+        });
+    }
+
+    private void requestCitySuggestions(String query) {
+        citySearchCall = weatherApiService.searchCities(query, 5, BuildConfig.WEATHER_API_KEY);
+        citySearchCall.enqueue(new Callback<List<GeocodingResponse>>() {
+            @Override public void onResponse(Call<List<GeocodingResponse>> call, Response<List<GeocodingResponse>> response) {
+                if (call.isCanceled() || !query.equals(etCitySearch.getText().toString().trim())) return;
+                if (response.isSuccessful() && response.body() != null && !response.body().isEmpty()) {
+                    citySuggestionAdapter.setCities(response.body());
+                    citySuggestionsContainer.setVisibility(View.VISIBLE);
+                } else hideCitySuggestions();
+            }
+            @Override public void onFailure(Call<List<GeocodingResponse>> call, Throwable t) {
+                if (!call.isCanceled()) { Log.e(TAG, "City suggestions failed", t); hideCitySuggestions(); }
+            }
+        });
+    }
+
+    private void searchCityFromButton() {
+        String query = etCitySearch.getText().toString().trim();
+        if (query.isEmpty()) { etCitySearch.setError("Please enter a city name"); return; }
+        hideKeyboard();
+        if (citySearchCall != null) citySearchCall.cancel();
+        citySearchCall = weatherApiService.searchCities(query, 5, BuildConfig.WEATHER_API_KEY);
+        citySearchCall.enqueue(new Callback<List<GeocodingResponse>>() {
+            @Override public void onResponse(Call<List<GeocodingResponse>> call, Response<List<GeocodingResponse>> response) {
+                if (!response.isSuccessful() || response.body() == null || response.body().isEmpty()) {
+                    Toast.makeText(MainActivity.this, "No matching city found", Toast.LENGTH_SHORT).show(); return;
+                }
+                GeocodingResponse chosen = response.body().get(0);
+                for (GeocodingResponse city : response.body()) {
+                    if (city.getName() != null && city.getName().equalsIgnoreCase(query)) { chosen = city; break; }
+                }
+                onCitySelected(chosen);
+            }
+            @Override public void onFailure(Call<List<GeocodingResponse>> call, Throwable t) {
+                if (!call.isCanceled()) Toast.makeText(MainActivity.this, "Unable to search for city", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void onCitySelected(GeocodingResponse city) {
+        if (city == null) return;
+        selectingSuggestion = true;
+        etCitySearch.setText(city.getName());
+        selectingSuggestion = false;
+        hideKeyboard();
+        etCitySearch.clearFocus();
+        hideCitySuggestions();
+        String label = city.getName();
+        if (!city.getSubtitle().isEmpty()) label += ", " + city.getSubtitle();
+        selectedCityLabel = label;
+        tvCity.setText(label);
+        fetchWeatherByCoordinates(city.getLat(), city.getLon());
+        fetchForecastByCoordinates(city.getLat(), city.getLon());
+    }
+
+    private void hideCitySuggestions() {
+        if (citySuggestionsContainer != null) citySuggestionsContainer.setVisibility(View.GONE);
+        if (citySuggestionAdapter != null) citySuggestionAdapter.setCities(new ArrayList<>());
+    }
+
+    private void hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(etCitySearch.getWindowToken(), 0);
+    }
+
     // CURRENT WEATHER API
 
     private void fetchWeather(String city) {
-        weatherApiService.getCurrentWeather(
-                city,
-                BuildConfig.WEATHER_API_KEY,
-                "metric"
-        ).enqueue(new Callback<WeatherResponse>() {
+        if (currentWeatherCall != null) currentWeatherCall.cancel();
+        currentWeatherCall = weatherApiService.getCurrentWeather(
+                city, BuildConfig.WEATHER_API_KEY, "metric"
+        );
+        currentWeatherCall.enqueue(new Callback<WeatherResponse>() {
             @Override
             public void onResponse(
                     Call<WeatherResponse> call,
@@ -128,8 +255,23 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void fetchWeatherByCoordinates(double lat, double lon) {
+        if (currentWeatherCall != null) currentWeatherCall.cancel();
+        currentWeatherCall = weatherApiService.getCurrentWeatherByCoordinates(lat, lon, BuildConfig.WEATHER_API_KEY, "metric");
+        currentWeatherCall.enqueue(new Callback<WeatherResponse>() {
+            @Override public void onResponse(Call<WeatherResponse> call, Response<WeatherResponse> response) {
+                if (call.isCanceled()) return;
+                if (response.isSuccessful() && response.body() != null) updateWeatherUI(response.body());
+                else Toast.makeText(MainActivity.this, "Unable to fetch weather: " + response.code(), Toast.LENGTH_SHORT).show();
+            }
+            @Override public void onFailure(Call<WeatherResponse> call, Throwable t) {
+                if (!call.isCanceled()) Log.e(TAG, "Coordinate weather request failed", t);
+            }
+        });
+    }
+
     private void updateWeatherUI(WeatherResponse weather) {
-        tvCity.setText(weather.getCityName());
+        tvCity.setText(selectedCityLabel != null ? selectedCityLabel : weather.getCityName());
 
         tvTemperature.setText(
                 Math.round(weather.getMain().getTemperature()) + "°"
@@ -176,11 +318,11 @@ public class MainActivity extends AppCompatActivity {
     // FIVE-DAY FORECAST API
 
     private void fetchFiveDayForecast(String city) {
-        weatherApiService.getFiveDayForecast(
-                city,
-                BuildConfig.WEATHER_API_KEY,
-                "metric"
-        ).enqueue(new Callback<ForecastResponse>() {
+        if (forecastCall != null) forecastCall.cancel();
+        forecastCall = weatherApiService.getFiveDayForecast(
+                city, BuildConfig.WEATHER_API_KEY, "metric"
+        );
+        forecastCall.enqueue(new Callback<ForecastResponse>() {
             @Override
             public void onResponse(
                     Call<ForecastResponse> call,
@@ -239,6 +381,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // CONVERT 3-HOURLY DATA INTO DAILY FORECAST
+
+    private void fetchForecastByCoordinates(double lat, double lon) {
+        if (forecastCall != null) forecastCall.cancel();
+        forecastCall = weatherApiService.getFiveDayForecastByCoordinates(lat, lon, BuildConfig.WEATHER_API_KEY, "metric");
+        forecastCall.enqueue(new Callback<ForecastResponse>() {
+            @Override public void onResponse(Call<ForecastResponse> call, Response<ForecastResponse> response) {
+                if (call.isCanceled()) return;
+                if (response.isSuccessful() && response.body() != null) {
+                    List<ForecastResponse.ForecastEntry> entries = response.body().getForecastEntries();
+                    if (entries != null && !entries.isEmpty()) buildDailyForecast(entries);
+                    else Toast.makeText(MainActivity.this, "No forecast data available", Toast.LENGTH_SHORT).show();
+                } else Toast.makeText(MainActivity.this, "Unable to fetch forecast: " + response.code(), Toast.LENGTH_SHORT).show();
+            }
+            @Override public void onFailure(Call<ForecastResponse> call, Throwable t) {
+                if (!call.isCanceled()) Log.e(TAG, "Coordinate forecast request failed", t);
+            }
+        });
+    }
 
     private void buildDailyForecast(List<ForecastResponse.ForecastEntry> entries) {
         Map<String, DailyWeather> dailyMap = new TreeMap<>();
@@ -398,6 +558,15 @@ public class MainActivity extends AppCompatActivity {
         if (tvWeatherIcon != null) {
             tvWeatherIcon.cancelAnimation();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (searchRunnable != null) searchHandler.removeCallbacks(searchRunnable);
+        if (citySearchCall != null) citySearchCall.cancel();
+        if (currentWeatherCall != null) currentWeatherCall.cancel();
+        if (forecastCall != null) forecastCall.cancel();
     }
 
     // DAILY FORECAST DATA HOLDER
