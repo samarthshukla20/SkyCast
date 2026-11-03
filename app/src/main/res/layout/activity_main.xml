@@ -186,23 +186,13 @@
 
         <!-- Forecast Placeholder -->
 
-        <LinearLayout
-            android:id="@+id/forecastContainer"
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/forecastRecyclerView"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="185dp"
             android:layout_marginTop="15dp"
-            android:background="@drawable/bg_weather_card"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Forecast will appear here"
-                android:textColor="@color/sky_text_secondary"
-                android:textSize="14sp" />
-
-        </LinearLayout>
+            android:clipToPadding="false"
+            android:overScrollMode="never" />
 
     </LinearLayout>
 
