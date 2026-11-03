@@ -7,4 +7,5 @@
     <color name="sky_text_primary">#FFFFFF</color>
     <color name="sky_text_secondary">#AAB7C4</color>
     <color name="sky_divider">#2B3B46</color>
+    <color name="sky_card_border">#344653</color>
 </resources>

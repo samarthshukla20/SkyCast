@@ -56,6 +56,9 @@ import retrofit2.Response;
 import android.content.SharedPreferences;
 import androidx.appcompat.app.AppCompatDelegate;
 
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "SkyCastForecast";
@@ -98,6 +101,7 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences themePreferences;
     private static final String THEME_PREFS = "skycast_theme_preferences";
     private static final String KEY_NIGHT_MODE = "night_mode";
+    private View weatherGlow;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -114,6 +118,7 @@ public class MainActivity extends AppCompatActivity {
         setupCitySuggestions();
         setupCitySearch();
         setupThemeToggle();
+        weatherGlow = findViewById(R.id.weatherGlow);
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         requestCurrentLocation();
@@ -543,6 +548,7 @@ public class MainActivity extends AppCompatActivity {
         if (weather.getWeather() != null && !weather.getWeather().isEmpty()) {
             String condition = weather.getWeather().get(0).getDescription();
             String iconCode = weather.getWeather().get(0).getIcon();
+            applyWeatherGlow(iconCode);
 
             if (condition != null && !condition.isEmpty()) {
                 condition = condition.substring(0, 1).toUpperCase(Locale.getDefault())
@@ -825,4 +831,138 @@ public class MainActivity extends AppCompatActivity {
         int precipitationProbability = 0;
         int closestNoonDistance = Integer.MAX_VALUE;
     }
+
+    // DYNAMIC WEATHER GLOW
+
+    private void applyWeatherGlow(String iconCode) {
+
+        if (weatherGlow == null) return;
+
+        String code = "";
+
+        if (iconCode != null && iconCode.length() >= 2) {
+            code = iconCode.substring(0, 2);
+        }
+
+        boolean isNight = iconCode != null && iconCode.endsWith("n");
+
+        int red, green, blue;
+
+        switch (code) {
+
+            // Clear sky
+            case "01":
+
+                if (isNight) {
+                    red = 116;
+                    green = 91;
+                    blue = 210;
+                } else {
+                    red = 255;
+                    green = 178;
+                    blue = 45;
+                }
+                break;
+
+            // Few clouds
+            case "02":
+                red = 111;
+                green = 176;
+                blue = 215;
+                break;
+
+            // Scattered clouds
+            case "03":
+                red = 132;
+                green = 165;
+                blue = 190;
+                break;
+
+            // Broken clouds
+            case "04":
+                red = 105;
+                green = 130;
+                blue = 155;
+                break;
+
+            // Rain / drizzle
+            case "09":
+            case "10":
+                red = 40;
+                green = 145;
+                blue = 220;
+                break;
+
+            // Thunderstorm
+            case "11":
+                red = 143;
+                green = 91;
+                blue = 205;
+                break;
+
+            // Snow
+            case "13":
+                red = 130;
+                green = 205;
+                blue = 245;
+                break;
+
+            // Mist / fog
+            case "50":
+                red = 155;
+                green = 171;
+                blue = 185;
+                break;
+
+            default:
+                red = 100;
+                green = 170;
+                blue = 205;
+                break;
+        }
+
+        GradientDrawable gradient = new GradientDrawable();
+
+        gradient.setShape(GradientDrawable.OVAL);
+
+        gradient.setGradientType(
+                GradientDrawable.RADIAL_GRADIENT
+        );
+
+        gradient.setGradientRadius(dp(88));
+
+        gradient.setGradientCenter(0.5f, 0.5f);
+
+        gradient.setColors(new int[]{
+
+                Color.argb(125, red, green, blue),
+
+                Color.argb(55, red, green, blue),
+
+                Color.TRANSPARENT
+
+        });
+
+        weatherGlow.animate().cancel();
+
+        weatherGlow.setAlpha(0f);
+        weatherGlow.setBackground(gradient);
+
+        weatherGlow.animate()
+                .alpha(1f)
+                .setDuration(650)
+                .start();
+    }
+
+
+    // Convert dp to pixels
+    private int dp(float value) {
+
+        return Math.round(
+                value * getResources()
+                        .getDisplayMetrics()
+                        .density
+        );
+    }
+
 }
