@@ -28,6 +28,20 @@
                 android:textColor="@color/sky_text_primary"
                 android:textSize="26sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnThemeToggle"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:background="@drawable/bg_weather_card"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="☀︎"
+                android:textColor="@color/sky_accent"
+                android:textSize="25sp"
+                android:contentDescription="Switch to light mode" />
+
         </LinearLayout>
 
         <!-- City Search and Current Location -->

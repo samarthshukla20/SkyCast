@@ -53,6 +53,9 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+import android.content.SharedPreferences;
+import androidx.appcompat.app.AppCompatDelegate;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "SkyCastForecast";
@@ -91,9 +94,14 @@ public class MainActivity extends AppCompatActivity {
     private Call<ForecastResponse> forecastCall;
     private boolean selectingSuggestion = false;
     private String selectedCityLabel;
+    private TextView btnThemeToggle;
+    private SharedPreferences themePreferences;
+    private static final String THEME_PREFS = "skycast_theme_preferences";
+    private static final String KEY_NIGHT_MODE = "night_mode";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        applySavedTheme();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -105,12 +113,14 @@ public class MainActivity extends AppCompatActivity {
         loadLastLocationCache();
         setupCitySuggestions();
         setupCitySearch();
+        setupThemeToggle();
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         requestCurrentLocation();
     }
 
     private void initializeViews() {
+        btnThemeToggle = findViewById(R.id.btnThemeToggle);
         tvCity = findViewById(R.id.tvCity);
         tvTemperature = findViewById(R.id.tvTemperature);
         tvCondition = findViewById(R.id.tvCondition);
@@ -125,6 +135,73 @@ public class MainActivity extends AppCompatActivity {
         btnCurrentLocation = findViewById(R.id.btnCurrentLocation);
         citySuggestionsContainer = findViewById(R.id.citySuggestionsContainer);
         citySuggestionsRecyclerView = findViewById(R.id.citySuggestionsRecyclerView);
+    }
+
+    // THEME MANAGEMENT
+
+    private void applySavedTheme() {
+
+        themePreferences = getSharedPreferences(
+                THEME_PREFS,
+                MODE_PRIVATE
+        );
+
+        boolean darkMode = themePreferences.getBoolean(
+                KEY_NIGHT_MODE,
+                true
+        );
+
+        AppCompatDelegate.setDefaultNightMode(
+                darkMode
+                        ? AppCompatDelegate.MODE_NIGHT_YES
+                        : AppCompatDelegate.MODE_NIGHT_NO
+        );
+    }
+
+
+    private void setupThemeToggle() {
+
+        updateThemeToggleIcon();
+
+        btnThemeToggle.setOnClickListener(v -> {
+
+            boolean currentlyDark = themePreferences.getBoolean(
+                    KEY_NIGHT_MODE,
+                    true
+            );
+
+            boolean newDarkMode = !currentlyDark;
+
+            // Save the user's selection.
+            themePreferences.edit()
+                    .putBoolean(KEY_NIGHT_MODE, newDarkMode)
+                    .apply();
+
+            // Apply the new theme.
+            AppCompatDelegate.setDefaultNightMode(
+                    newDarkMode
+                            ? AppCompatDelegate.MODE_NIGHT_YES
+                            : AppCompatDelegate.MODE_NIGHT_NO
+            );
+
+        });
+    }
+
+
+    private void updateThemeToggleIcon() {
+
+        boolean darkMode = themePreferences.getBoolean(
+                KEY_NIGHT_MODE,
+                true
+        );
+
+        if (darkMode) {
+            btnThemeToggle.setText("\u2600\uFE0E");
+            btnThemeToggle.setContentDescription("Switch to light mode");
+        } else {
+            btnThemeToggle.setText("\u263E\uFE0E");
+            btnThemeToggle.setContentDescription("Switch to dark mode");
+        }
     }
 
     // FORECAST RECYCLER VIEW
