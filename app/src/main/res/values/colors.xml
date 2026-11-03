@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sky_background">#101820</color>
+    <color name="sky_card">#192630</color>
+    <color name="sky_accent">#69D2E7</color>
+    <color name="sky_secondary">#A8E6CF</color>
+    <color name="sky_text_primary">#FFFFFF</color>
+    <color name="sky_text_secondary">#AAB7C4</color>
+    <color name="sky_divider">#2B3B46</color>
+</resources>
